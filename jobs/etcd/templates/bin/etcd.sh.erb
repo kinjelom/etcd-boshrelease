@@ -1,0 +1,99 @@
+#!/bin/bash
+
+set -eu
+
+# https://etcd.io/docs/v3.5/op-guide/configuration/#configuration-file
+# You can configure etcd through the following:
+# - Command-line flags
+# - Environment variables: every flag has a corresponding environment variable that has the same name but is prefixed
+#   with ETCD_ and formatted in all caps and snake case. For example, --some-flag would be ETCD_SOME_FLAG.
+# - Configuration file
+# Caution: If you mix-and-match configuration options, then the following rules apply:
+# - Command-line flags take precedence over environment variables.
+# - If you provide a configuration file all command-line flags and environment variables are ignored.
+
+## Environment variables from `etcd.server_evs` {
+<%-
+etcd_evs = p('etcd.server_evs', {})
+etcd_evs.each do |key, value|
+-%>
+export <%= key %>="<%= value %>"
+<%- end -%>
+## }
+
+<%-
+  listen_peer_port = p('etcd.listen_peer_port', 2380)
+  listen_client_grpc_port = p('etcd.listen_client_grpc_port', 2379)
+  listen_client_http_port = p('etcd.listen_client_http_port', 2378)
+  # PLEASE KEEP CIPHER SUITES IN SYNC WITH KUBE-APISERVER, KUBE-CONTROLLER-MANAGER, KUBE-SCHEDULER, KUBELET, AND ETCD
+  cipher_suites = p('etcd.cipher_suites','TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384')
+  metrics_level = p('etcd.metrics_level', 'basic')
+  metrics_protocol = p('etcd.metrics_protocol', 'http')
+  metrics_port = p('etcd.metrics_port', 2381)
+-%>
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_declared_functions 'log_audit'
+assert_non_empty_variables 'etcd_member_name' 'etcd_store_dir' 'etcd_initial_cluster_token' \
+                           'etcd_client_local_urls' 'etcd_client_others_urls' \
+                           'etcd_peer_local_urls' 'etcd_peer_local_url_map' 'etcd_peer_cluster_url_map'
+
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_read_restoring_flag_file' 'etcd_add_member_to_cluster'
+
+DATA_EXISTED=$(if [ -d "$etcd_store_dir/database/member" ]; then echo 'true'; else echo 'false'; fi)
+RESTORE_MODE='none'; etcd_read_restoring_flag_file "$etcd_store_dir" RESTORE_MODE
+
+CLUSTER_INITIAL_MAP="$etcd_peer_cluster_url_map"
+CLUSTER_INITIAL_STATE='existing'
+CLUSTER_FORCE_NEW='false'
+
+if [ "$DATA_EXISTED" == "true" ]; then
+  if [ "$RESTORE_MODE" == "leader" ]; then
+    CLUSTER_INITIAL_STATE='new'
+    CLUSTER_FORCE_NEW='true'
+    CLUSTER_INITIAL_MAP="$etcd_peer_local_url_map"
+  fi
+else # there is NO data
+  if [ "$RESTORE_MODE" == "leader" ]; then
+    log_audit "etcd:etcd.sh" "failure: cannot run leader without data!"
+    exit 1
+  elif [ "$RESTORE_MODE" == "follower" ]; then
+    etcd_add_member_to_cluster "$etcd_client_others_urls" "$etcd_member_name" "$etcd_peer_local_urls" CLUSTER_INITIAL_MAP
+  else
+    CLUSTER_INITIAL_STATE='new'
+  fi
+fi
+
+diagnostic_info="data-existed: $DATA_EXISTED, restore-mode: $RESTORE_MODE, force-new-cluster: $CLUSTER_FORCE_NEW, initial-cluster-state: $CLUSTER_INITIAL_STATE, initial-cluster-token: $etcd_initial_cluster_token, initial-cluster: $CLUSTER_INITIAL_MAP"
+log_audit "etcd:etcd.sh" "start etcd ($diagnostic_info)"
+
+/var/vcap/packages/etcd/bin/etcd \
+  --name="$etcd_member_name" \
+  --data-dir="$etcd_store_dir/database" \
+  --listen-peer-urls='https://0.0.0.0:<%= listen_peer_port %>' \
+  --listen-client-urls='https://0.0.0.0:<%= listen_client_grpc_port %>' \
+  --listen-client-http-urls='https://0.0.0.0:<%= listen_client_http_port %>' \
+  --advertise-client-urls="$etcd_client_local_urls" \
+  --initial-advertise-peer-urls="$etcd_peer_local_urls" \
+  --force-new-cluster="$CLUSTER_FORCE_NEW" \
+  --initial-cluster="$CLUSTER_INITIAL_MAP" \
+  --initial-cluster-state="$CLUSTER_INITIAL_STATE" \
+  --initial-cluster-token="$etcd_initial_cluster_token" \
+  --client-cert-auth \
+  --trusted-ca-file='/var/vcap/jobs/etcd/config/etcd-ca.crt' \
+  --cert-file='/var/vcap/jobs/etcd/config/etcd.crt' \
+  --key-file='/var/vcap/jobs/etcd/config/etcd.key' \
+  --peer-client-cert-auth \
+  --peer-trusted-ca-file='/var/vcap/jobs/etcd/config/peer-ca.crt' \
+  --peer-cert-file='/var/vcap/jobs/etcd/config/peer.crt' \
+  --peer-key-file='/var/vcap/jobs/etcd/config/peer.key' \
+  --cipher-suites='<%= cipher_suites %>' <% if_p("etcd.metrics_enabled") do %> --metrics='<%= metrics_level %>' --listen-metrics-urls='<%= metrics_protocol %>://0.0.0.0:<%= metrics_port %>' \<% end %>
+<%-
+etcd_flags = p('etcd.server_additional_flags', [])
+etcd_flags.each do |flag|
+  flag = "--#{flag}" unless flag.start_with?("--")
+-%>
+  <%= flag %> \
+<%- end -%>

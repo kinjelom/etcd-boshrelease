@@ -1,0 +1,172 @@
+log_fun() {
+    echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [etcd-functions] - $*"
+}
+
+jq() {
+  /var/vcap/packages/tools/bin/jq "$@"
+}
+
+etcdctl() {
+  /var/vcap/packages/etcd/bin/etcdctl \
+    --cacert /var/vcap/jobs/etcd/config/etcd-ca.crt \
+    --cert /var/vcap/jobs/etcd/config/root.crt \
+    --key /var/vcap/jobs/etcd/config/root.key \
+    "$@"
+}
+
+etcd_get_healthy_members_count() {
+  local endpoints=$1
+  local -n __res=$2
+  local health_endpoint=${3:-''}
+  local output
+  output=$(etcdctl --endpoints="$endpoints" endpoint health -w json 2>/dev/null) || true
+  # [
+  # {"endpoint":"https://fb623ddc-6963-4d3e-8732-7a4c3d255563.etcd.default.etcd-rnd.bosh:2379","health":true,"took":"15.900717ms"},
+  # {"endpoint":"https://fb623ddc-6963-4d3e-8732-7a4c3d255563.etcd.default.etcd-rnd.bosh:2379","health":true,"took":"15.839542ms"}
+  # ]
+  local endpoint_filter=''
+  if [ "$health_endpoint" == "" ]; then
+    endpoint_filter='[.[] | select(.health == true)] | length'
+  else
+    endpoint_filter="[.[] | select(.health == true) | select(.endpoint == \"$health_endpoint\")] | length"
+  fi
+  local count=0
+  count=$(echo "$output" | jq "$endpoint_filter")
+  if [ "$count" == "" ]; then
+    count=0
+  fi
+  __res="$count"
+}
+
+etcd_wait_for_healthy() {
+  local endpoints=$1
+  local timeout=$2
+  local health_endpoint=${3:-''}
+  local start_time
+  start_time=$(date +%s)
+  local current_time=$start_time
+  local healthy_count=0
+  etcd_get_healthy_members_count "$endpoints" healthy_count "$health_endpoint"
+  while [[ $healthy_count -eq 0 ]]; do
+    log_fun "healthy_count=$healthy_count, health_endpoint=$health_endpoint, endpoints=$endpoints"
+    current_time=$(date +%s)
+    elapsed_time=$((current_time - start_time))
+    if [ $elapsed_time -ge "$timeout" ]; then
+      log_fun "Timeout reached. ETCD is NOT healthy (health_endpoint=$health_endpoint, endpoints=$endpoints)"
+      return 1
+    fi
+    remaining_time=$((timeout - elapsed_time))
+    log_fun "Waiting for ETCD to be healthy, $remaining_time/$timeout sec. left..."
+    sleep 1
+    etcd_get_healthy_members_count "$endpoints" healthy_count  "$health_endpoint"
+  done
+
+  log_fun "ETCD is healthy (healthy_count=$healthy_count, health_endpoint=$health_endpoint, endpoints: $endpoints)."
+  return 0
+}
+
+etcd_add_member_to_cluster() {
+  local endpoints=$1
+  local member_name=$2
+  local peer_urls=$3
+  local -n __res=$4
+
+  local initial_cluster=''
+  initial_cluster=$(etcdctl --endpoints="$endpoints" member list -w json 2>/dev/null | jq -r '.members[] | "\(.name)=\(.peerURLs[0])"'  | paste -sd, -) || true
+  # etcdctl member list -w json
+  # {
+  #  "header": {},
+  #  "members": [
+  #    {
+  #      "ID": 6454907557891438539,
+  #      "name": "12b5dbe1-1dfa-4bf0-8d7f-674c66aa3c47",
+  #      "peerURLs": ["https://12b5dbe1-1dfa-4bf0-8d7f-674c66aa3c47.etcd.default.etcd-rnd.bosh:2380"],
+  #      "clientURLs": ["https://12b5dbe1-1dfa-4bf0-8d7f-674c66aa3c47.etcd.default.etcd-rnd.bosh:2379"]
+  #    },
+  #    {...}
+  #  ]
+  # }
+  if [[ ",$initial_cluster" == *",$member_name="* ]]; then
+    log_fun "I am ($member_name) already a member of the cluster ($initial_cluster)."
+  else
+    log_fun "I am ($member_name) NOT a member of the cluster, I will join it ($initial_cluster)."
+    # `member add` this command inform the existing cluster about the new member.
+    local output
+    output=$(etcdctl --endpoints="$endpoints" member add "$member_name" --peer-urls "$peer_urls" -w simple 2>/dev/null | grep "ETCD_INITIAL_CLUSTER=") || true
+    # ETCD_INITIAL_CLUSTER="12b5dbe1-1dfa-4bf0-8d7f-674c66aa3c47=https://12b5dbe1-1dfa-4bf0-8d7f-674c66aa3c47.etcd.default.etcd-rnd.bosh:2380,..."
+    if [[ "$output" == "ETCD_INITIAL_CLUSTER=\""*"\"" ]]; then
+      initial_cluster="${output#*ETCD_INITIAL_CLUSTER=\"}"
+      initial_cluster="${initial_cluster%\"*}"
+    else
+      log_fun "Warning: cannot join to the cluster: 'etcdctl --endpoints=$endpoints member add $member_name --peer-urls $peer_urls', initial_cluster=$initial_cluster, output: $output"
+      initial_cluster=''
+    fi
+  fi
+  __res="$initial_cluster"
+}
+
+etcd_remove_member_from_cluster() {
+  local endpoints=$1
+  local member_name=$2
+  member_id="$(etcdctl --endpoints="$endpoints" member list -w json  2>/dev/null | jq  -r '.members[] | select(.name == \"$member_name\") | .ID')" || true
+  if [ "$member_id" != "" ] ; then
+    log_fun "found member $member_name, id: $member_id, will remove one from the cluster..."
+    if etcdctl --endpoints="$endpoints" member remove "$member_id"; then
+      log_fun "member $member_name with id $member_id removed"
+    else
+      log_fun "cannot remove member $member_name with id $member_id "
+    fi
+  fi
+}
+
+etcd_find_my_and_leader_id() {
+  local endpoints=$1
+  local -n __my_id=$2
+  local -n __leader_id=$3
+  leader_endpoint=$(etcdctl --endpoints="$endpoints" endpoint status -w json  2>/dev/null | jq -r '.[0].Status | (.leader, .header.member_id)')
+  if [ -z "$leader_endpoint" ]; then
+    __my_id=""
+    __leader_id=""
+  else
+    __my_id=$(echo "$output" | sed -n '1p')
+    __leader_id=$(echo "$output" | sed -n '2p')
+  fi
+}
+
+etcd_find_leader_endpoint() {
+  local endpoints=$1
+  local -n __res=$2
+  leader_endpoint=$(etcdctl --endpoints="$endpoints" endpoint status -w json | jq -r '.[] | select(.Status.leader==.Status.header.member_id) | .Endpoint')
+  if [ -z "$leader_endpoint" ]; then
+    __res=""
+  else
+    __res="$leader_endpoint"
+  fi
+}
+
+export etcd_restoring_flag_file="restoring.flag"
+
+etcd_write_restoring_flag_file(){
+  local dir=$1
+  local mode=$2
+  echo "$mode" > "$dir/$etcd_restoring_flag_file"
+  chown vcap:vcap "$dir/$etcd_restoring_flag_file"
+  chmod 666 "$dir/$etcd_restoring_flag_file"
+}
+
+etcd_read_restoring_flag_file(){
+  local dir=$1
+  local -n __res=$2
+  __res='none'
+  if [ -f "$dir/$etcd_restoring_flag_file" ]; then
+    __res=$(xargs < "$dir/$etcd_restoring_flag_file")
+  fi
+}
+
+etcd_remove_restoring_flag_file(){
+  local dir=$1
+  local path="${dir:?}/${etcd_restoring_flag_file:?}"
+  if [ -e "$path" ]; then
+    rm -rf "$path"
+  fi
+}

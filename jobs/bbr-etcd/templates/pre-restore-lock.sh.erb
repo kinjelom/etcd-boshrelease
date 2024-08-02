@@ -1,26 +1,32 @@
-#!/usr/bin/env bash
+#!/bin/bash -eu
 
-set -euo pipefail
+source /var/vcap/packages/tools/scripts/common.sh
+etcd_store_dir=''; backup_data_before_restore='';
+source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
+assert_declared_functions 'log_audit' 'log_bbr' 'etcd_job_stop'
+assert_non_empty_variables 'etcd_store_dir' 'backup_data_before_restore'
 
-echo "Stopping etcd"
-/var/vcap/bosh/bin/monit stop etcd
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_remove_restoring_flag_file'
 
-TIMEOUT=60
+log_audit "begin"
 
-if timeout "$TIMEOUT" /bin/bash <<EOF
-  #!/bin/bash
-
-  until /var/vcap/bosh/bin/monit summary | grep etcd | grep "not monitored" ; do
-    echo "waiting for etcd to stop..."
-    sleep 5
-  done
-EOF
-then
-  echo "Etcd stopped"
+if etcd_job_stop; then
+  log_bbr "etcd job is stopped"
 else
-  echo "Timed out stopping etcd after $TIMEOUT seconds"
+  log_audit "failure: etcd job is NOT stopped"
   exit 1
 fi
 
-echo "Deleting old etcd data"
-rm -rf /var/vcap/store/etcd
+if [ -d "$etcd_store_dir/database/member" ]; then
+  if [ "$backup_data_before_restore" == 'true' ]; then
+    store_dir_bak_file="$etcd_store_dir/backup/database.pre-restore-bak-$(date +'%Y-%m-%d_%H-%M-%S').tar.gz"
+    tar -cvf - -C "$etcd_store_dir/database/member" . | gzip -9 > "$store_dir_bak_file"
+    log_bbr "previous data backup: $store_dir_bak_file"
+  fi
+fi
+
+rm -rf "${etcd_store_dir:?}/database/"*
+etcd_remove_restoring_flag_file "$etcd_store_dir"
+
+log_audit "success"

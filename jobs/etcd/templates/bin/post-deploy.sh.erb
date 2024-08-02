@@ -1,0 +1,30 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_wait_for_healthy'
+
+etcd_client_cluster_urls=''; job_ops_timeout_seconds=''; BOSH_INSTANCE_BOOTSTRAP='';
+source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_declared_functions 'log_audit'
+assert_non_empty_variables 'job_ops_timeout_seconds' 'etcd_client_cluster_urls' 'BOSH_INSTANCE_BOOTSTRAP'
+
+log_audit "etcd:post-deploy" "begin (bootstrap: $BOSH_INSTANCE_BOOTSTRAP)"
+
+if [ "$BOSH_INSTANCE_BOOTSTRAP" == "true" ]; then
+  if etcd_wait_for_healthy "$etcd_client_cluster_urls" "$job_ops_timeout_seconds"; then
+
+    source /var/vcap/jobs/etcd/bin/authentication-setup.sh
+    assert_declared_functions 'etcd_authentication_setup' 'etcd_authentication_show'
+
+    etcd_authentication_setup "$etcd_client_cluster_urls"
+    etcd_authentication_show "$etcd_client_cluster_urls"
+    log_audit "etcd:post-deploy" "success: deployed with healthy cluster, authentication setup done"
+
+  else
+    log_audit "etcd:post-deploy" "failure: deployed with unhealthy cluster"
+    exit 1
+  fi
+fi
+
+log_audit "etcd:post-deploy" "end"

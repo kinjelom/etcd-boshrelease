@@ -1,0 +1,42 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_find_leader_endpoint'
+
+etcd_client_local_urls=''; etcd_client_cluster_urls=''; snapshot_filename=''; etcd_meta_info_bbr_filename='';
+source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
+assert_non_empty_variables 'etcd_client_local_urls' 'etcd_client_cluster_urls' 'snapshot_filename' 'etcd_meta_info_bbr_filename'
+assert_declared_functions 'log_audit' 'log_bbr' 'etcd_create_snapshot' 'etcd_write_bbr_meta_info_file'
+
+log_audit "begin (BBR_ARTIFACT_DIRECTORY=$BBR_ARTIFACT_DIRECTORY)"
+
+log_bbr "Looking for leader..."
+leader_endpoint=''
+etcd_find_leader_endpoint "$etcd_client_cluster_urls" leader_endpoint # Find the leader endpoint
+# Check if the leader was found
+if [ -z "$leader_endpoint" ]; then
+  log_audit "failure: No leader found."
+  exit 1
+fi
+log_bbr "Leader found: $leader_endpoint, local endpoint: $etcd_client_local_urls"
+
+# The BBR CLI is responsible for setting the BBR_ARTIFACT_DIRECTORY
+# Anything placed in the BBR_ARTIFACT_DIRECTORY will be drained and removed from the instance by BBR CLI.
+mkdir -p "$BBR_ARTIFACT_DIRECTORY"
+snapshot_file="$BBR_ARTIFACT_DIRECTORY/$snapshot_filename"
+snapshot_meta_info_file="$BBR_ARTIFACT_DIRECTORY/$etcd_meta_info_bbr_filename"
+etcd_write_bbr_meta_info_file "$snapshot_meta_info_file" "$etcd_client_local_urls" "$leader_endpoint"
+log_bbr "Snapshot meta-info saved to $snapshot_meta_info_file"
+
+if [ "$leader_endpoint" == "$etcd_client_local_urls" ]; then
+  log_bbr "Creating leader snapshot from: $etcd_client_local_urls"
+  if etcd_create_snapshot "$etcd_client_local_urls" "$snapshot_file"; then
+    log_audit "success: leader snapshot saved to $snapshot_file"
+  else
+    log_audit "failure: cannot create etcd snapshot"
+  fi
+else
+  log_audit "This member is follower, snapshot will be omitted ($etcd_client_local_urls)"
+fi
+

@@ -1,0 +1,72 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_write_restoring_flag_file'
+
+job_ops_timeout_seconds=''; etcd_client_local_urls=''; etcd_store_dir=''; snapshot_filename=''; etcd_meta_info_bbr_filename='';
+source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
+assert_declared_functions 'log_audit' 'log_bbr' 'etcd_restore_snapshot' 'etcd_read_bbr_meta_info_file'
+assert_non_empty_variables 'job_ops_timeout_seconds' 'etcd_client_local_urls' 'etcd_store_dir' 'snapshot_filename' 'etcd_meta_info_bbr_filename'
+
+log_audit "begin (BBR_ARTIFACT_DIRECTORY=$BBR_ARTIFACT_DIRECTORY)"
+
+# The BBR CLI is responsible for setting the BBR_ARTIFACT_DIRECTORY
+# Anything placed in the BBR_ARTIFACT_DIRECTORY will be will be available to the restore script at restore time.
+# Find files matching the pattern
+snapshot_file="$BBR_ARTIFACT_DIRECTORY/$snapshot_filename"
+bbr_meta_info_filepath="$BBR_ARTIFACT_DIRECTORY/$etcd_meta_info_bbr_filename"
+
+log_bbr "Reading BBR meta-info from $bbr_meta_info_filepath"
+snapshot_local_endpoint=''
+snapshot_leader_endpoint=''
+etcd_read_bbr_meta_info_file "$bbr_meta_info_filepath" snapshot_local_endpoint snapshot_leader_endpoint
+log_bbr "Snapshot read meta-info: local-endpoint: $snapshot_local_endpoint, leader-endpoint: $snapshot_leader_endpoint"
+
+restore_leader="false"
+if [ "$snapshot_leader_endpoint" == "$etcd_client_local_urls" ]; then
+  restore_leader="true"
+fi
+audit_msg='restore follower'
+if [ "$restore_leader" == "true" ]; then
+
+  audit_msg='restore leader is: '
+  if [ -e "$snapshot_file" ]; then
+    log_bbr "Restoring snapshot: $snapshot_file"
+    etcd_restore_snapshot "$snapshot_file" "$etcd_store_dir/database"
+    chown -R vcap:vcap "$etcd_store_dir/database"
+    log_bbr "Snapshot file $snapshot_file restored to $etcd_store_dir/database"
+    etcd_write_restoring_flag_file "$etcd_store_dir" "leader"
+    audit_msg="$audit_msg restored,"
+  else
+    log_audit "failure: snapshot file $snapshot_file does not exist."
+    exit 1
+  fi
+
+  # The first etcd to run will parse a lot of new data, and it takes time.
+  # (The followers afterward will take only a few seconds.)
+
+  log_bbr "Starting etcd restore leader..."
+  if etcd_job_start; then
+    log_bbr "etcd has started etcd"
+    audit_msg="$audit_msg started,"
+  else
+    log_audit "failure: unable to start restore leader ($audit_msg)"
+    exit 1
+  fi
+
+  if etcd_wait_for_healthy "$etcd_client_local_urls" "$job_ops_timeout_seconds" "$etcd_client_local_urls"; then
+    log_bbr "Restore leader is healthy"
+    audit_msg="$audit_msg healthy,"
+  else
+    audit_msg="$audit_msg NOT healthy,"
+    log_audit "failure: restore leader is NOT healthy ($audit_msg)"
+    exit 1
+  fi
+
+else
+  etcd_write_restoring_flag_file "$etcd_store_dir" "follower"
+fi
+
+log_audit "success: $audit_msg (restore_leader=$restore_leader)"

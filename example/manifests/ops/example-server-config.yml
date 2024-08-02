@@ -1,0 +1,12 @@
+---
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/etcd?/server_additional_flags?/-
+  value: "--log-level info"
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/etcd?/server_additional_flags?/-
+  value: enable-log-rotation=false
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/etcd?/server_evs?/ETCD_LOG_OUTPUTS?
+  value: "default"

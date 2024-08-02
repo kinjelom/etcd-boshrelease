@@ -1,0 +1,95 @@
+---
+name: ((deployment_name))
+
+stemcells:
+- alias: default
+  os: ubuntu-jammy
+  version: latest
+
+releases:
+- name: etcd
+  version: latest
+- name: bpm
+  version: latest
+
+instance_groups:
+- name: etcd
+  instances: ((etcd_instances))
+  azs: [z1,z2,z3]
+  persistent_disk_type: ((etcd_persistent_disk_type))
+  vm_type: ((etcd_vm_type))
+  stemcell: default
+  networks:
+  - name: default
+  jobs:
+  - name: etcd
+    release: etcd
+    provides:
+      etcd: {as: etcd}
+    properties:
+      etcd:
+        initial_cluster_token: etcd-cluster # -((deployment_name))
+      tls:
+        etcd: # client and server authentication
+          ca: ((tls_etcd.ca))
+          certificate: ((tls_etcd.certificate))
+          private_key: ((tls_etcd.private_key))
+        peer: # peers authentication
+          ca: ((tls_etcd_peer.ca))
+          certificate: ((tls_etcd_peer.certificate))
+          private_key: ((tls_etcd_peer.private_key))
+        root: # root authentication
+          certificate: ((tls_etcd_user_root.certificate))
+          private_key: ((tls_etcd_user_root.private_key))
+  - name: bpm
+    release: bpm
+
+update:
+  serial: true
+  canaries: 1
+  max_in_flight: 1
+  canary_watch_time: 1000-60000
+  update_watch_time: 1000-60000
+
+variables:
+- name: etcd_ca
+  type: certificate
+  options:
+    is_ca: true
+    common_name: "((deployment_name)) CA"
+    duration: 3650
+
+- name: tls_etcd
+  type: certificate
+  options:
+    ca: etcd_ca
+    common_name: etcd.default.((deployment_name)).bosh
+    alternative_names:
+    - "etcd.default.((deployment_name)).bosh"
+    - "*.etcd.default.((deployment_name)).bosh"
+    extended_key_usage:
+    - server_auth
+    - client_auth
+    duration: 3650
+
+- name: tls_etcd_peer
+  type: certificate
+  options:
+    ca: etcd_ca
+    common_name: etcd.default.((deployment_name)).bosh
+    alternative_names:
+    - "etcd.default.((deployment_name)).bosh"
+    - "*.etcd.default.((deployment_name)).bosh"
+    extended_key_usage:
+    - server_auth
+    - client_auth
+    duration: 3650
+
+- name: tls_etcd_user_root
+  type: certificate
+  options:
+    ca: etcd_ca
+    common_name: root
+    extended_key_usage:
+      - client_auth
+    duration: 3650

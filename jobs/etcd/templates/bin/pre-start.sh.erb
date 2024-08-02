@@ -1,0 +1,10 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+etcd_store_dir=''; source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_non_empty_variables 'etcd_store_dir'
+assert_declared_functions 'etcd_ensure_dirs' 'log_audit'
+
+log_audit "etcd:pre-start" "begin"
+etcd_ensure_dirs "$etcd_store_dir"
+log_audit "etcd:pre-start" "end"

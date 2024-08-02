@@ -1,52 +1,21 @@
-#!/usr/bin/env bash
+#!/bin/bash -eu
 
-set -euo pipefail
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_remove_restoring_flag_file'
 
-echo "Starting etcd"
+etcd_store_dir=''
+source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
+assert_declared_functions 'log_audit' 'etcd_job_start'
+assert_non_empty_variables 'etcd_store_dir'
 
-TIMEOUT=60
-if timeout "$TIMEOUT" /bin/bash <<EOF
-  #!/bin/bash
+log_audit "begin"
 
-  until /var/vcap/bosh/bin/monit start etcd; do
-    echo "starting etcd"
-    sleep 5
-  done
-EOF
-then
-  echo "monit has started etcd"
+if etcd_job_start; then
+  etcd_remove_restoring_flag_file "$etcd_store_dir"
+  log_audit "success: etcd is started"
 else
-  echo "monit was unable to start etcd after $TIMEOUT seconds"
+  log_audit "failure: etcd is NOT started"
   exit 1
 fi
 
-if timeout "$TIMEOUT" /bin/bash <<EOF
-  #!/bin/bash
-
-  until /var/vcap/bosh/bin/monit summary | grep etcd | grep "running"; do
-    echo "waiting for etcd daemon to start"
-    sleep 5
-  done
-EOF
-then
-  echo "etcd daemon has started"
-else
-  echo "etcd daemon was unable to start after $TIMEOUT seconds"
-  exit 1
-fi
-
-# The first etcd to run will parse a lot of new data, and it takes time.
-# (The followers afterward will take only a few seconds.)
-
-if timeout "$TIMEOUT" /bin/bash <<EOF
-#!/bin/bash
-
-until ETCDCTL_API=3 LOCAL=true /var/vcap/jobs/etcd/bin/etcdctl endpoint health > /dev/null ; do
-  sleep 5
-done
-EOF
-then
-  echo "etcd daemon served the local health endpoint successfully"
-else
-  echo "etcd daemon was unable to serve the local health endpoint within $TIMEOUT seconds; continuing anyway"
-fi

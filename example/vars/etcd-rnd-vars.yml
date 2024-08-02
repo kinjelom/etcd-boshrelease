@@ -1,0 +1,4 @@
+etcd_instances: 3
+etcd_persistent_disk_type: 10GiB_SSD
+etcd_vm_type: bosh.c2.r2
+

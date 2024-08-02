@@ -12,3 +12,6 @@
 /.final_builds/packages/**/*.tgz
 /.cache
 src/bbr/vendor
+.temp
+.tmp
+.idea

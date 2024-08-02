@@ -1,0 +1,9 @@
+---
+name: tools
+
+dependencies: [ ]
+
+files:
+  - meta-info/blobs-versions.env
+  - tools/*
+

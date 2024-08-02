@@ -1,3 +1,0 @@
-- type: replace
-  path: /instance_groups/name=etcd/jobs/name=etcd/provides/etcd/shared?
-  value: true

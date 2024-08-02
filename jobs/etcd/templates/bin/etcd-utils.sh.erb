@@ -1,0 +1,66 @@
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcdctl'
+
+<%-
+  listen_client_grpc_port = p('etcd.listen_client_grpc_port', 2379)
+  listen_peer_port = p('etcd.listen_peer_port', 2380)
+  def get_url(instance, port)
+    "https://#{instance.id}.etcd.default.#{spec.deployment}.bosh:#{port}"
+  end
+-%>
+export etcd_member_name='<%= spec.id %>'
+export etcd_store_dir='<%= p("etcd.store_dir") %>'
+export etcd_initial_cluster_token='<%= p("etcd.initial_cluster_token") %>'
+export job_ops_timeout_seconds='<%= p("etcd.job_ops_timeout_seconds") %>'
+
+export etcd_client_local_urls="<%= get_url(spec, listen_client_grpc_port) %>"
+export etcd_client_others_urls="<%= link('etcd').instances.reject { |instance| instance.id == spec.id }.map { |instance| get_url(instance, listen_client_grpc_port) }.join(",") %>"
+export etcd_client_cluster_urls="<%= link('etcd').instances.map { |instance| get_url(instance, listen_client_grpc_port) }.join(",") %>"
+
+export etcd_peer_local_urls="<%= get_url(spec, listen_peer_port) %>"
+export etcd_peer_local_url_map="$etcd_member_name=<%= get_url(spec, listen_peer_port) %>"
+export etcd_peer_cluster_url_map="<%= link('etcd').instances.map { |instance| "#{instance.id}=#{get_url(instance, listen_peer_port)}" }.join(",") %>"
+
+# https://bosh.io/docs/jobs/#properties-spec
+## STRUCTURAL INFO
+export BOSH_INSTANCE_DEPLOYMENT='<%= spec.deployment %>' # spec.deployment: Name of the BOSH deployment defining the instance group.
+export BOSH_INSTANCE_GROUP='<%= spec.name %>' # spec.name: Name of the instance group that the instance belongs to.
+export BOSH_INSTANCE_AZ='<%= spec.az %>' # spec.az: The availability zone that the instance is placed into.
+export BOSH_INSTANCE_ID='<%= spec.id %>' # spec.id: Unique and immutable UUID of the instance.
+export BOSH_INSTANCE_INDEX='<%= spec.index.to_s %>'
+export BOSH_INSTANCE_BOOTSTRAP='<%= spec.bootstrap.to_s %>' # spec.bootstrap: Boolean that is true if the instance is the first instance of its group.
+
+export etcd_lifecycle_audit_log_file='/var/vcap/sys/log/etcd/lifecycle.audit.log'
+log_audit() {
+  local cmp=''
+  if [[ $# -gt 1 ]]; then
+    cmp="/$1"
+    shift
+  fi
+  # local envs="Env: $(env | tr '\n' ';')"
+  echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [audit$cmp] - $*" >> "$etcd_lifecycle_audit_log_file"
+}
+
+
+etcdctl_local() {
+  etcdctl --endpoints "$etcd_client_local_urls" "$@"
+}
+
+etcdctl_others() {
+  etcdctl --endpoints "$etcd_client_others_urls" "$@"
+}
+
+etcdctl_cluster() {
+  etcdctl --endpoints "$etcd_client_cluster_urls" "$@"
+}
+
+etcd_ensure_dirs() {
+  local store_path=$1
+  mkdir -p "$store_path"
+  mkdir -p "$store_path/database"
+  mkdir -p "$store_path/backup"
+  chown -R vcap:vcap "$store_path"
+  # directory "/var/vcap/store/etcd/database" recommended permission is "-rwx------" to prevent possible unprivileged access to the data
+  chmod 700 "$store_path/database"
+}

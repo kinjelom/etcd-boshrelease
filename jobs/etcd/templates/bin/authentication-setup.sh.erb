@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_declared_functions 'etcdctl' 'jq'
+
+etcd_ensure_root_auth() {
+  local endpoints=$1
+  echo "Ensuring root configuration ..."
+  auth_status=$(etcdctl --endpoints "$endpoints" auth status -w json | jq -r '.enabled')
+  if [[ "$auth_status" == "true" ]]; then
+    echo "Authentication is already enabled, the bootstrap configuration is omitted."
+  else
+    echo "Authentication is not enabled, proceeding with the bootstrap configuration..."
+    if etcdctl --endpoints "$endpoints" user get root > /dev/null 2>&1; then
+      echo "The root user already exists."
+    else
+      echo "Creating the root user..."
+      etcdctl --endpoints "$endpoints" user add root --no-password
+      etcdctl --endpoints "$endpoints" user grant-role root root
+    fi
+    etcdctl --endpoints "$endpoints" auth enable
+  fi
+}
+
+etcdctl_add_role_if_not_exists() {
+  local endpoints=$1
+  local rolename=$2
+  if etcdctl --endpoints "$endpoints" role get "$rolename" > /dev/null 2>&1; then
+    echo "The role $rolename already exists"
+  else
+    echo "Adding the new role $rolename ..."
+    etcdctl --endpoints "$endpoints" role add "$rolename"
+  fi
+}
+
+etcdctl_add_user_if_not_exists() {
+  local endpoints=$1
+  local username=$2
+  local password=$3
+  if etcdctl --endpoints "$endpoints" user get "$username" > /dev/null 2>&1; then
+    echo "The user $username already exists" #, updating password..."
+    #TODO: etcdctl_local user passwd "$username" --password="$password" --interactive=false
+  else
+    echo "Adding the new $username ..."
+    etcdctl --endpoints "$endpoints" user add "$username:$password" --interactive=false
+  fi
+}
+
+# shellcheck disable=SC1073
+etcd_setup_roles() {
+  local endpoints=$1
+<%- if_p('roles') do |roles| roles.each do |rolename, role| -%>
+  ### <%= rolename %>
+  rolename='<%= rolename %>'
+  echo "Setup role $rolename ..."
+  etcdctl_add_role_if_not_exists "$endpoints" "$rolename"
+  <%- role["permissions"].each do |permission| -%>
+  etcdctl --endpoints "$endpoints" role grant-permission "$rolename" '<%= permission["type"] %>' '<%= permission["path"] %>' --prefix='<%= permission["prefix"] %>'
+  <%- end -%>
+<%- end end -%>
+}
+
+etcd_setup_users() {
+  local endpoints=$1
+<%- if_p('users') do |users| users.each do |username, user| if username != "root" -%>
+  ### <%= username %>
+  username='<%= username %>'
+  echo "Setup user $username ..."
+  etcdctl_add_user_if_not_exists "$endpoints" "$username" '<%= user["password"] %>'
+  <%- user["roles"].each do |rolename| -%>
+  etcdctl --endpoints "$endpoints" user grant-role "$username" '<%= rolename %>'
+  <%- end -%>
+<%- end end end -%>
+}
+
+etcd_authentication_show(){
+  local endpoints=$1
+  echo "--- ### Authentication Setup"
+  local auth_status=$(etcdctl --endpoints "$endpoints" auth status -w json | jq -r '.enabled')
+  echo "auth.status.enabled: $auth_status"
+  local roles=$(etcdctl --endpoints "$endpoints" role list -w json | jq '.roles' -c)
+  echo "roles: $roles"
+  local user_list=$(etcdctl --endpoints "$endpoints" user list)
+  echo "users:"
+  echo "$user_list" | while read -r user; do
+    local user_roles=$(etcdctl --endpoints "$endpoints" user get "$user" -w json  | jq '.roles' -c)
+    echo "  $user: { roles: $user_roles }"
+  done
+  echo "###"
+}
+
+etcd_authentication_setup() {
+  local endpoints=$1
+  etcd_ensure_root_auth "$endpoints"
+  etcd_setup_roles "$endpoints"
+  etcd_setup_users "$endpoints"
+}
+

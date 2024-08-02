@@ -2,90 +2,125 @@
 name: etcd
 
 templates:
-  bin/drain.erb: bin/drain
-  bin/ensure-member-healthy.erb: bin/ensure-member-healthy
-  bin/etcd.erb: bin/etcd
-  bin/etcdctl.erb: bin/etcdctl
-  bin/post-start.erb: bin/post-start
-  bin/pre-start.erb: bin/pre-start
-  bin/setup.erb: bin/setup
-  bin/utils.sh.erb: bin/utils.sh
-  bin/authentication-setup.erb: bin/authentication-setup
+  # job lifecycle: https://bosh.io/docs/job-lifecycle/
+  bin/pre-start.sh.erb: bin/pre-start
+  bin/post-start.sh.erb: bin/post-start
+  bin/post-deploy.sh.erb: bin/post-deploy
+  bin/pre-stop.sh.erb: bin/pre-stop
+  # bin/drain.sh.erb: bin/drain
+  # bin/post-stop.sh.erb: bin/post-stop
+  # others
+  bin/etcd.sh.erb: bin/etcd.sh
+  bin/etcdctl.sh.erb: bin/etcdctl.sh
+  bin/etcd-utils.sh.erb: bin/etcd-utils.sh
+  bin/etcd-functions.sh.erb: bin/etcd-functions.sh
+  bin/authentication-setup.sh.erb: bin/authentication-setup.sh
   config/bpm.yml.erb: config/bpm.yml
+  config/bosh-spec.yml.erb: config/bosh-spec.yml
   config/etcd-ca.crt.erb: config/etcd-ca.crt
   config/etcd.crt.erb: config/etcd.crt
   config/etcd.key.erb: config/etcd.key
-  config/etcdctl-ca.crt.erb: config/etcdctl-ca.crt
-  config/etcdctl.crt.erb: config/etcdctl.crt
-  config/etcdctl.key.erb: config/etcdctl.key
-  config/etcdctl-root.crt.erb: config/etcdctl-root.crt
-  config/etcdctl-root.key.erb: config/etcdctl-root.key
   config/peer-ca.crt.erb: config/peer-ca.crt
   config/peer.crt.erb: config/peer.crt
   config/peer.key.erb: config/peer.key
+  config/root.crt.erb: config/root.crt
+  config/root.key.erb: config/root.key
 
 packages:
 - etcd
+- tools
 
 provides:
 - name: etcd
   type: etcd
   properties:
-  - etcd.dns_suffix
-  - tls.etcdctl.ca
-  - tls.etcdctl.certificate
-  - tls.etcdctl.private_key
+  - etcd.listen_peer_port
+  - etcd.listen_client_grpc_port
+  - etcd.store_dir
+  - etcd.initial_cluster_token
+  - etcd.job_ops_timeout_seconds
 
 consumes:
 - name: etcd
   type: etcd
 
 properties:
-  etcd.dns_suffix:
-    description: If provided, used as a DNS suffix for all nodes in the etcd cluster
+  etcd.listen_peer_port:
+    description: "The port on which etcd listens for peer traffic (communication between etcd nodes)."
+    default: 2380
+  etcd.listen_client_grpc_port:
+    description: "The port on which etcd listens for GRPC client traffic (communication between etcd and its clients)."
+    default: 2379
+  etcd.listen_client_http_port:
+    description: "The port on which etcd listens for HTTP client traffic (communication between etcd and its clients)."
+    default: 2378
+  etcd.cipher_suites:
+    description: "Specifies the TLS cipher suites to be used for securing communication. PLEASE KEEP THIS IN SYNC WITH KUBE-APISERVER, KUBE-CONTROLLER-MANAGER, KUBE-SCHEDULER, KUBELET, AND ETCD."
+    default: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+  etcd.store_dir:
+    description: "The directory on the filesystem where persistent data will be stored."
+    default: "/var/vcap/store/etcd"
+  etcd.initial_cluster_token:
+    description: "Initial cluster token for the etcd cluster during bootstrap. Specifying this can protect you from unintended cross-cluster interaction when running multiple clusters."
+    default: "etcd-cluster"
+  etcd.metrics_enabled:
+    description: This property controls whether metrics are enabled. If set to true, the metrics-related flags will be included in the configuration.
+    default: true
+  etcd.metrics_level:
+    description: This property specifies the level of detail for the exported metrics. Possible values are basic and extensive. This flag is only included if metrics are enabled.
+    default: basic
   etcd.metrics_protocol:
     description: IF provided with etcd.metrics_port, metrics endpoints listen with the protocol. http or https.
+    default: http
   etcd.metrics_port:
-    description: IF provided with etcd.metrics_protocol, metrics endpoints listen on the port. 2379 and 2380 can not be used.
+    description: IF provided with etcd.metrics_protocol, metrics endpoints listen on the port.
+    default: 2381
+  etcd.metrics_port:
+    description: IF provided with etcd.metrics_protocol, metrics endpoints listen on the port.
+    default: 2381
+  etcd.server_evs:
+    description: "Environment variables to be initialized at the start of the ETCD server. Note: Command-line flags take precedence over environment variables."
+    default: {}
+    example:
+      ETCD_LOG_OUTPUTS: default
+      ETCD_LOG_LEVEL: info
+  etcd.server_additional_flags:
+    description: "Command-line flags to add at the start of the ETCD server. Note: Flags take precedence over environment variables."
+    default: []
+    example:
+    - --log-outputs='default'
+    - --log-level='info'
+  etcd.job_ops_timeout_seconds:
+    description: "The timeout in seconds for all operations related to starting, stopping, and other management actions for ETCD job."
+    default: "120"
   tls.etcd.ca:
     description: CA for etcd client and server authentication
   tls.etcd.certificate:
     description: Certificate for etcd client and server authentication
   tls.etcd.private_key:
     description: Private key for etcd client and server authentication
-  tls.etcdctl.ca:
-    description: CA for etcdctl client authentication
-  tls.etcdctl.certificate:
-    description: Certificate for etcdctl client authentication
-  tls.etcdctl.private_key:
-    description: Private key for etcdctl client authentication
-  tls.etcdctl-root.certificate:
-    description: Certificate for etcdctl client authentication with CN root
-  tls.etcdctl-root.private_key:
-    description: Private key for etcdctl client authentication with CN root
   tls.peer.ca:
     description: CA for peer authentication
   tls.peer.certificate:
     description: Certificate for peer authentication
   tls.peer.private_key:
     description: Private key for peer authentication
-  users:
-    description: List of user's name, permissions, path, and whether the path is a prefix. Etcd will use these info to set up rbac rules for these users
+  tls.root.certificate:
+    description: Certificate for client authentication with CN root, CA=tls.etcd.ca
+  tls.root.private_key:
+    description: Private key for client authentication with CN root
+  roles:
+    description: Map of roles to setup ETCD rbac rules
     example: |
-      - name: root
-        password: ((etcd_user_root_password))
-        versions: [ "v2", "v3" ]
-      - name: flanneld
-        permissions:
-          read:
-          - /coreos.com/network/*
-          write:
-          - /coreos.com/network/*
-        password: ((etcd_user_flanneld_password))
-        versions: [ "v2" ]
-      - name: foo
-        permissions:
-          read:
-          - /bar
-        password: pass
-        versions: [ "v2", "v3" ]
+      ns1_role:
+        permissions: [{type: read, path: /namespace1/, prefix: true}]
+  users:
+    description: Map of users to setup ETCD rbac rules
+    example: |
+      admin:
+        roles: [root]
+      auditor:
+        roles: [quest]
+      user1:
+        password: ((etcd_user1_password))
+        roles: [ns1_role, quest]

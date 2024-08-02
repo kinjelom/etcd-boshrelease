@@ -1,0 +1,68 @@
+---
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/roles?/auditor?
+  value:
+    permissions: [{type: read, path: /, prefix: true}]
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/roles?/ns1_admin_role?
+  value:
+    permissions: [{type: readwrite, path: /ns1/, prefix: true}]
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/roles?/ns2_admin_role?
+  value:
+    permissions: [{type: readwrite, path: /ns2/, prefix: true}]
+
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/users?/admin?
+  value:
+    password: ((etcd_admin_password))
+    roles: [root]
+
+- type: replace
+  path: /variables/-
+  value:
+    name: etcd_admin_password
+    type: password
+
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/users?/auditor?
+  value:
+    password: ((etcd_auditor_password))
+    roles: [auditor]
+
+- type: replace
+  path: /variables/-
+  value:
+    name: etcd_auditor_password
+    type: password
+
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/users?/ns1_admin?
+  value:
+    password: ((etcd_ns1_admin_password))
+    roles: [ns1_admin_role]
+
+- type: replace
+  path: /variables/-
+  value:
+    name: etcd_ns1_admin_password
+    type: password
+
+
+- type: replace
+  path: /instance_groups/name=etcd/jobs/name=etcd/properties?/users?/ns2_admin?
+  value:
+    password: ((etcd_ns2_admin_password))
+    roles: [ns2_admin_role]
+
+- type: replace
+  path: /variables/-
+  value:
+    name: etcd_ns2_admin_password
+    type: password
+

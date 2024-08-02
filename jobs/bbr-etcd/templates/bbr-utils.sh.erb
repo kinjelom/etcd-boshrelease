@@ -1,0 +1,157 @@
+<%-
+  listen_client_grpc_port = link('etcd').p('etcd.listen_client_grpc_port', 2379)
+  listen_peer_port = link('etcd').p('etcd.listen_peer_port', 2380)
+  def get_url(instance, port)
+    "https://#{instance.id}.etcd.default.#{spec.deployment}.bosh:#{port}"
+  end
+-%>
+export etcd_member_name='<%= spec.id %>'
+export etcd_store_dir='<%= link("etcd").p("etcd.store_dir") %>'
+export etcd_initial_cluster_token='<%= link("etcd").p("etcd.initial_cluster_token") %>'
+export job_ops_timeout_seconds='<%= link("etcd").p("etcd.job_ops_timeout_seconds") %>'
+
+export etcd_client_local_urls="<%= get_url(spec, listen_client_grpc_port) %>"
+export etcd_client_others_urls="<%= link('etcd').instances.reject { |instance| instance.id == spec.id }.map { |instance| get_url(instance, listen_client_grpc_port) }.join(",") %>"
+export etcd_client_cluster_urls="<%= link('etcd').instances.map { |instance| get_url(instance, listen_client_grpc_port) }.join(",") %>"
+
+export etcd_peer_local_urls="<%= get_url(spec, listen_peer_port) %>"
+export etcd_peer_local_url_map="$etcd_member_name=<%= get_url(spec, listen_peer_port) %>"
+export etcd_peer_cluster_url_map="<%= link('etcd').instances.map { |instance| "#{instance.id}=#{get_url(instance, listen_peer_port)}" }.join(",") %>"
+
+
+export backup_data_before_restore='<%= p("bbr-etcd.backup_data_before_restore") %>'
+export snapshot_filename='<%= p("bbr-etcd.snapshot_filename") %>'
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcdctl'
+
+export etcd_lifecycle_audit_log_file='/var/vcap/sys/log/bbr-etcd/lifecycle.audit.log'
+log_audit() {
+  local cmd=$(basename "$SUDO_COMMAND")
+  if [ -z "$cmd" ]; then
+    cmd="default"
+  fi
+  # local envs="Env: $(env | tr '\n' ';')"
+  echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [audit/$cmd/$SUDO_USER] - $*" >> "$etcd_lifecycle_audit_log_file"
+}
+
+log_bbr() {
+  local cmd=$(basename "$SUDO_COMMAND")
+  if [ -z "$cmd" ]; then
+    cmd="default"
+  fi
+  echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [$cmd/$SUDO_USER] - $*" >> "/var/vcap/sys/log/bbr-etcd/bbr-$cmd.log"
+}
+
+
+# Function to create a snapshot of the etcd database
+# https://etcd.io/docs/v3.5/op-guide/recovery/
+etcd_create_snapshot() {
+  local leader_endpoint=$1
+  local snapshot_path=$2
+  etcdctl --endpoints="$leader_endpoint" snapshot save "$snapshot_path"
+}
+
+# Function restores snapshot
+# https://etcd.io/docs/v3.5/op-guide/recovery/
+etcd_restore_snapshot() {
+  local snapshot_path=$1
+  local database_dir=$2
+  # etcdutl snapshot restore <filename> --data-dir {output dir} [options] [flags]
+  # Flags:
+  #  -h, --help                                 help for restore
+  #      --bump-revision uint                   How much to increase the latest revision after restore
+  #      --data-dir string                      Path to the output data directory
+  #      --initial-advertise-peer-urls string   List of this member's peer URLs to advertise to the rest of the cluster (default "http://localhost:2380")
+  #      --initial-cluster string               Initial cluster configuration for restore bootstrap (default "default=http://localhost:2380")
+  #      --initial-cluster-token string         Initial cluster token for the etcd cluster during restore bootstrap (default "etcd-cluster")
+  #      --initial-memory-map-size uint         Initial memory map size of the database in bytes. It uses the default value if not defined or defined to 0 (default 10737418240)
+  #      --mark-compacted                       Mark the latest revision after restore as the point of scheduled compaction (required if --bump-revision > 0, disallowed otherwise)
+  #      --name string                          Human-readable name for this member (default "default")
+  #      --skip-hash-check                      Ignore snapshot integrity hash value (required if copied from data directory)
+  #      --wal-dir string                       Path to the WAL directory (use --data-dir if none given)
+  /var/vcap/packages/etcd/bin/etcdutl snapshot restore "$snapshot_path" \
+    --name "$etcd_member_name" \
+    --initial-advertise-peer-urls "$etcd_peer_local_urls"  \
+    --initial-cluster "$etcd_peer_local_url_map" \
+    --initial-cluster-token "$etcd_initial_cluster_token" \
+    --data-dir "$database_dir"
+}
+
+export etcd_meta_info_bbr_filename="meta-info-bbr.yml"
+
+etcd_write_bbr_meta_info_file() {
+  local filepath=$1
+  local local_endpoint=$2
+  local leader_endpoint=$3
+  echo "local_endpoint: \"$local_endpoint\"" > "$filepath"
+  echo "leader_endpoint: \"$leader_endpoint\"" >> "$filepath"
+  # chmod 666 "$filepath"
+  # echo "[etcd_write_bbr_meta_info_file] meta-info saved to file $filepath"
+}
+
+etcd_read_bbr_meta_info_file() {
+  local filepath=$1
+  local -n __local_endpoint=$2
+  local -n __leader_endpoint=$3
+  __local_endpoint=$(yq e '.["local_endpoint"]' "$filepath")
+  __leader_endpoint=$(yq e '.["leader_endpoint"]' "$filepath")
+}
+
+run_with_timeout() {
+  local TIMEOUT=$1
+  shift
+  local SCRIPT="$*"
+  if [[ "$SCRIPT" != "#!/bin/bash"* ]]; then
+    SCRIPT="#!/bin/bash\n$SCRIPT"
+  fi
+  timeout "$TIMEOUT" /bin/bash <<EOF
+$SCRIPT
+EOF
+}
+
+
+etcd_job_start(){
+  if run_with_timeout "$job_ops_timeout_seconds" '
+    until /var/vcap/bosh/bin/monit start etcd; do
+      sleep 5
+    done
+    '
+  then
+    log_bbr "etcd_job_start: monit has started etcd"
+  else
+    log_bbr "etcd_job_start: monit was unable to start etcd after $job_ops_timeout_seconds seconds"
+    return 1
+  fi
+
+  if run_with_timeout "$job_ops_timeout_seconds" '
+    until /var/vcap/bosh/bin/monit summary | grep etcd | grep "running"; do
+      sleep 5
+    done
+    '
+  then
+    log_bbr "etcd_job_start: Etcd daemon has started"
+  else
+    log_bbr "etcd_job_start: Etcd daemon was unable to start after $job_ops_timeout_seconds seconds"
+    return 1
+  fi
+
+  return 0
+}
+
+etcd_job_stop(){
+  /var/vcap/bosh/bin/monit stop etcd
+  if run_with_timeout "$job_ops_timeout_seconds" '
+    until /var/vcap/bosh/bin/monit summary | grep etcd | grep "not monitored" ; do
+      sleep 5
+    done
+    '
+  then
+    log_bbr "etcd_job_stop: Etcd stopped"
+  else
+    log_bbr "etcd_job_stop: Timed out stopping etcd after $job_ops_timeout_seconds seconds"
+    return 1
+  fi
+  return 0
+}

@@ -1,0 +1,398 @@
+# ETCD Tools Help
+
+## etcdctl
+
+```bash
+/var/vcap/packages/etcd/bin/etcdctl --help
+```
+
+```text
+NAME:
+	etcdctl - A simple command line client for etcd3.
+
+USAGE:
+	etcdctl [flags]
+
+VERSION:
+	3.5.14
+
+API VERSION:
+	3.5
+
+
+COMMANDS:
+	alarm disarm		Disarms all alarms
+	alarm list		Lists all alarms
+	auth disable		Disables authentication
+	auth enable		Enables authentication
+	auth status		Returns authentication status
+	check datascale		Check the memory usage of holding data for different workloads on a given server endpoint.
+	check perf		Check the performance of the etcd cluster
+	compaction		Compacts the event history in etcd
+	defrag			Defragments the storage of the etcd members with given endpoints
+	del			Removes the specified key or range of keys [key, range_end)
+	elect			Observes and participates in leader election
+	endpoint hashkv		Prints the KV history hash for each endpoint in --endpoints
+	endpoint health		Checks the healthiness of endpoints specified in `--endpoints` flag
+	endpoint status		Prints out the status of endpoints specified in `--endpoints` flag
+	get			Gets the key or a range of keys
+	help			Help about any command
+	lease grant		Creates leases
+	lease keep-alive	Keeps leases alive (renew)
+	lease list		List all active leases
+	lease revoke		Revokes leases
+	lease timetolive	Get lease information
+	lock			Acquires a named lock
+	make-mirror		Makes a mirror at the destination etcd cluster
+	member add		Adds a member into the cluster
+	member list		Lists all members in the cluster
+	member promote		Promotes a non-voting member in the cluster
+	member remove		Removes a member from the cluster
+	member update		Updates a member in the cluster
+	move-leader		Transfers leadership to another etcd cluster member.
+	put			Puts the given key into the store
+	role add		Adds a new role
+	role delete		Deletes a role
+	role get		Gets detailed information of a role
+	role grant-permission	Grants a key to a role
+	role list		Lists all roles
+	role revoke-permission	Revokes a key from a role
+	snapshot restore	Restores an etcd member snapshot to an etcd directory
+	snapshot save		Stores an etcd node backend snapshot to a given file
+	snapshot status		[deprecated] Gets backend snapshot status of a given file
+	txn			Txn processes all the requests in one transaction
+	user add		Adds a new user
+	user delete		Deletes a user
+	user get		Gets detailed information of a user
+	user grant-role		Grants a role to a user
+	user list		Lists all users
+	user passwd		Changes password of user
+	user revoke-role	Revokes a role from a user
+	version			Prints the version of etcdctl
+	watch			Watches events stream on keys or prefixes
+
+OPTIONS:
+      --cacert=""				verify certificates of TLS-enabled secure servers using this CA bundle
+      --cert=""					identify secure client using this TLS certificate file
+      --command-timeout=5s			timeout for short running command (excluding dial timeout)
+      --debug[=false]				enable client-side debug logging
+      --dial-timeout=2s				dial timeout for client connections
+  -d, --discovery-srv=""			domain name to query for SRV records describing cluster endpoints
+      --discovery-srv-name=""			service name to query when using DNS discovery
+      --endpoints=[127.0.0.1:2379]		gRPC endpoints
+  -h, --help[=false]				help for etcdctl
+      --hex[=false]				print byte strings as hex encoded strings
+      --insecure-discovery[=true]		accept insecure SRV records describing cluster endpoints
+      --insecure-skip-tls-verify[=false]	skip server certificate verification (CAUTION: this option should be enabled only for testing purposes)
+      --insecure-transport[=true]		disable transport security for client connections
+      --keepalive-time=2s			keepalive time for client connections
+      --keepalive-timeout=6s			keepalive timeout for client connections
+      --key=""					identify secure client using this TLS key file
+      --password=""				password for authentication (if this option is used, --user option shouldn't include password)
+      --user=""					username[:password] for authentication (prompt if password is not supplied)
+  -w, --write-out="simple"			set the output format (fields, json, protobuf, simple, table)
+```
+
+## etcdutl
+
+```bash
+/var/vcap/packages/etcd/bin/etcdutl --help
+```
+
+```text
+Usage:
+etcdutl [command]
+
+Available Commands:
+backup      [legacy] offline backup of etcd directory
+defrag      Defragments the storage of the etcd
+help        Help about any command
+snapshot    Manages etcd node snapshots
+version     Prints the version of etcdutl
+
+Flags:
+-h, --help               help for etcdutl
+-w, --write-out string   set the output format (fields, json, protobuf, simple, table) (default "simple")
+
+Use "etcdutl [command] --help" for more information about a command.
+```
+
+
+## etcd
+
+```bash
+/var/vcap/packages/etcd/bin/etcd --help
+```
+
+```text
+Usage:
+
+  etcd [flags]
+    Start an etcd server.
+
+  etcd --version
+    Show the version of etcd.
+
+  etcd -h | --help
+    Show the help information about etcd.
+
+  etcd --config-file
+    Path to the server configuration file. Note that if a configuration file is provided, other command line flags and environment variables will be ignored.
+
+  etcd gateway
+    Run the stateless pass-through etcd TCP connection forwarding proxy.
+
+  etcd grpc-proxy
+    Run the stateless etcd v3 gRPC L7 reverse proxy.
+
+
+Member:
+  --name 'default'
+    Human-readable name for this member.
+  --data-dir '${name}.etcd'
+    Path to the data directory.
+  --wal-dir ''
+    Path to the dedicated wal directory.
+  --snapshot-count '100000'
+    Number of committed transactions to trigger a snapshot to disk.
+  --heartbeat-interval '100'
+    Time (in milliseconds) of a heartbeat interval.
+  --election-timeout '1000'
+    Time (in milliseconds) for an election to timeout. See tuning documentation for details.
+  --initial-election-tick-advance 'true'
+    Whether to fast-forward initial election ticks on boot for faster election.
+  --listen-peer-urls 'http://localhost:2380'
+    List of URLs to listen on for peer traffic.
+  --listen-client-urls 'http://localhost:2379'
+    List of URLs to listen on for client grpc traffic and http as long as --listen-client-http-urls is not specified.
+  --listen-client-http-urls ''
+    List of URLs to listen on for http only client traffic. Enabling this flag removes http services from --listen-client-urls.
+  --max-snapshots '5'
+    Maximum number of snapshot files to retain (0 is unlimited).
+  --max-wals '5'
+    Maximum number of wal files to retain (0 is unlimited).
+  --quota-backend-bytes '0'
+    Raise alarms when backend size exceeds the given quota (0 defaults to low space quota).
+  --backend-bbolt-freelist-type 'map'
+    BackendFreelistType specifies the type of freelist that boltdb backend uses(array and map are supported types).
+  --backend-batch-interval ''
+    BackendBatchInterval is the maximum time before commit the backend transaction.
+  --backend-batch-limit '0'
+    BackendBatchLimit is the maximum operations before commit the backend transaction.
+  --max-txn-ops '128'
+    Maximum number of operations permitted in a transaction.
+  --max-request-bytes '1572864'
+    Maximum client request size in bytes the server will accept.
+  --max-concurrent-streams 'math.MaxUint32'
+    Maximum concurrent streams that each client can open at a time.
+  --enable-grpc-gateway
+    Enable GRPC gateway.
+  --grpc-keepalive-min-time '5s'
+    Minimum duration interval that a client should wait before pinging server.
+  --grpc-keepalive-interval '2h'
+    Frequency duration of server-to-client ping to check if a connection is alive (0 to disable).
+  --grpc-keepalive-timeout '20s'
+    Additional duration of wait before closing a non-responsive connection (0 to disable).
+  --socket-reuse-port 'false'
+    Enable to set socket option SO_REUSEPORT on listeners allowing rebinding of a port already in use.
+  --socket-reuse-address 'false'
+    Enable to set socket option SO_REUSEADDR on listeners allowing binding to an address in TIME_WAIT state.
+  --raft-read-timeout '5s'
+    Read timeout set on each rafthttp connection
+  --raft-write-timeout '5s'
+    Write timeout set on each rafthttp connection
+
+Clustering:
+  --initial-advertise-peer-urls 'http://localhost:2380'
+    List of this member's peer URLs to advertise to the rest of the cluster.
+  --initial-cluster 'default=http://localhost:2380'
+    Initial cluster configuration for bootstrapping.
+  --initial-cluster-state 'new'
+    Initial cluster state ('new' when bootstrapping a new cluster or 'existing' when adding new members to an existing cluster).
+    After successful initialization (bootstrapping or adding), flag is ignored on restarts.
+  --initial-cluster-token 'etcd-cluster'
+    Initial cluster token for the etcd cluster during bootstrap.
+    Specifying this can protect you from unintended cross-cluster interaction when running multiple clusters.
+  --advertise-client-urls 'http://localhost:2379'
+    List of this member's client URLs to advertise to the public.
+    The client URLs advertised should be accessible to machines that talk to etcd cluster. etcd client libraries parse these URLs to connect to the cluster.
+  --discovery ''
+    Discovery URL used to bootstrap the cluster.
+  --discovery-fallback 'proxy'
+    Expected behavior ('exit' or 'proxy') when discovery services fails.
+    "proxy" supports v2 API only.
+  --discovery-proxy ''
+    HTTP proxy to use for traffic to discovery service.
+  --discovery-srv ''
+    DNS srv domain used to bootstrap the cluster.
+  --discovery-srv-name ''
+    Suffix to the dns srv name queried when bootstrapping.
+  --strict-reconfig-check 'true'
+    Reject reconfiguration requests that would cause quorum loss.
+  --pre-vote 'true'
+    Enable to run an additional Raft election phase.
+  --auto-compaction-retention '0'
+    Auto compaction retention length. 0 means disable auto compaction.
+  --auto-compaction-mode 'periodic'
+    Interpret 'auto-compaction-retention' one of: periodic|revision. 'periodic' for duration based retention, defaulting to hours if no time unit is provided (e.g. '5m'). 'revision' for revision number based retention.
+  --enable-v2 'false'
+    Accept etcd V2 client requests. Deprecated and to be decommissioned in v3.6.
+  --v2-deprecation 'not-yet'
+    Phase of v2store deprecation. Allows to opt-in for higher compatibility mode.
+    Supported values:
+      'not-yet'                // Issues a warning if v2store have meaningful content (default in v3.5)
+      'write-only'             // Custom v2 state is not allowed (planned default in v3.6)
+      'write-only-drop-data'   // Custom v2 state will get DELETED !
+      'gone'                   // v2store is not maintained any longer. (planned default in v3.7)
+
+Security:
+  --cert-file ''
+    Path to the client server TLS cert file.
+  --key-file ''
+    Path to the client server TLS key file.
+  --client-cert-auth 'false'
+    Enable client cert authentication.
+  --client-cert-file ''
+    Path to an explicit peer client TLS cert file otherwise cert file will be used when client auth is required.
+  --client-key-file ''
+    Path to an explicit peer client TLS key file otherwise key file will be used when client auth is required.
+  --client-crl-file ''
+    Path to the client certificate revocation list file.
+  --client-cert-allowed-hostname ''
+    Allowed TLS hostname for client cert authentication.
+  --trusted-ca-file ''
+    Path to the client server TLS trusted CA cert file.
+  --auto-tls 'false'
+    Client TLS using generated certificates.
+  --peer-cert-file ''
+    Path to the peer server TLS cert file.
+  --peer-key-file ''
+    Path to the peer server TLS key file.
+  --peer-client-cert-auth 'false'
+    Enable peer client cert authentication.
+  --peer-trusted-ca-file ''
+    Path to the peer server TLS trusted CA file.
+  --peer-cert-allowed-cn ''
+    Required CN for client certs connecting to the peer endpoint.
+  --peer-cert-allowed-hostname ''
+    Allowed TLS hostname for inter peer authentication.
+  --peer-auto-tls 'false'
+    Peer TLS using self-generated certificates if --peer-key-file and --peer-cert-file are not provided.
+  --peer-client-cert-file ''
+    Path to an explicit peer client TLS cert file otherwise peer cert file will be used when client auth is required.
+  --peer-client-key-file ''
+    Path to an explicit peer client TLS key file otherwise peer key file will be used when client auth is required.
+  --self-signed-cert-validity '1'
+    The validity period of the client and peer certificates that are automatically generated by etcd when you specify ClientAutoTLS and PeerAutoTLS, the unit is year, and the default is 1.
+  --peer-crl-file ''
+    Path to the peer certificate revocation list file.
+  --cipher-suites ''
+    Comma-separated list of supported TLS cipher suites between client/server and peers (empty will be auto-populated by Go).
+  --cors '*'
+    Comma-separated whitelist of origins for CORS, or cross-origin resource sharing, (empty or * means allow all).
+  --host-whitelist '*'
+    Acceptable hostnames from HTTP client requests, if server is not secure (empty or * means allow all).
+  --tls-min-version 'TLS1.2'
+    Minimum TLS version supported by etcd. Possible values: TLS1.2, TLS1.3.
+  --tls-max-version ''
+    Maximum TLS version supported by etcd. Possible values: TLS1.2, TLS1.3 (empty will be auto-populated by Go).
+
+Auth:
+  --auth-token 'simple'
+    Specify a v3 authentication token type and its options ('simple' or 'jwt').
+  --bcrypt-cost 10
+    Specify the cost / strength of the bcrypt algorithm for hashing auth passwords. Valid values are between 4 and 31.
+  --auth-token-ttl 300
+    Time (in seconds) of the auth-token-ttl.
+
+Profiling and Monitoring:
+  --enable-pprof 'false'
+    Enable runtime profiling data via HTTP server. Address is at client URL + "/debug/pprof/"
+  --metrics 'basic'
+    Set level of detail for exported metrics, specify 'extensive' to include server side grpc histogram metrics.
+  --listen-metrics-urls ''
+    List of URLs to listen on for the metrics and health endpoints.
+
+Logging:
+  --logger 'zap'
+    Currently only supports 'zap' for structured logging.
+  --log-outputs 'default'
+    Specify 'stdout' or 'stderr' to skip journald logging even when running under systemd, or list of comma separated output targets.
+  --log-level 'info'
+    Configures log level. Only supports debug, info, warn, error, panic, or fatal.
+  --enable-log-rotation 'false'
+    Enable log rotation of a single log-outputs file target.
+  --log-rotation-config-json '{"maxsize": 100, "maxage": 0, "maxbackups": 0, "localtime": false, "compress": false}'
+    Configures log rotation if enabled with a JSON logger config. MaxSize(MB), MaxAge(days,0=no limit), MaxBackups(0=no limit), LocalTime(use computers local time), Compress(gzip)". 
+
+Experimental distributed tracing:
+  --experimental-enable-distributed-tracing 'false'
+    Enable experimental distributed tracing.
+  --experimental-distributed-tracing-address 'localhost:4317'
+    Distributed tracing collector address.
+  --experimental-distributed-tracing-service-name 'etcd'
+    Distributed tracing service name, must be same across all etcd instances.
+  --experimental-distributed-tracing-instance-id ''
+    Distributed tracing instance ID, must be unique per each etcd instance.
+  --experimental-distributed-tracing-sampling-rate '0'
+    Number of samples to collect per million spans for distributed tracing. Disabled by default.
+
+v2 Proxy (to be deprecated in v3.6):
+  --proxy 'off'
+    Proxy mode setting ('off', 'readonly' or 'on').
+  --proxy-failure-wait 5000
+    Time (in milliseconds) an endpoint will be held in a failed state.
+  --proxy-refresh-interval 30000
+    Time (in milliseconds) of the endpoints refresh interval.
+  --proxy-dial-timeout 1000
+    Time (in milliseconds) for a dial to timeout.
+  --proxy-write-timeout 5000
+    Time (in milliseconds) for a write to timeout.
+  --proxy-read-timeout 0
+    Time (in milliseconds) for a read to timeout.
+
+Experimental feature:
+  --experimental-initial-corrupt-check 'false'
+    Enable to check data corruption before serving any client/peer traffic.
+  --experimental-corrupt-check-time '0s'
+    Duration of time between cluster corruption check passes.
+  --experimental-compact-hash-check-enabled 'false'
+    Enable leader to periodically check followers compaction hashes.
+  --experimental-compact-hash-check-time '1m'
+    Duration of time between leader checks followers compaction hashes.
+  --experimental-enable-v2v3 ''
+    Serve v2 requests through the v3 backend under a given prefix. Deprecated and to be decommissioned in v3.6.
+  --experimental-enable-lease-checkpoint 'false'
+    ExperimentalEnableLeaseCheckpoint enables primary lessor to persist lease remainingTTL to prevent indefinite auto-renewal of long lived leases.
+  --experimental-enable-lease-checkpoint-persist 'false'
+    Enable persisting remainingTTL to prevent indefinite auto-renewal of long lived leases. Always enabled in v3.6. Should be used to ensure smooth upgrade from v3.5 clusters with this feature enabled. Requires experimental-enable-lease-checkpoint to be enabled.
+  --experimental-compaction-batch-limit 1000
+    ExperimentalCompactionBatchLimit sets the maximum revisions deleted in each compaction batch.
+  --experimental-peer-skip-client-san-verification 'false'
+    Skip verification of SAN field in client certificate for peer connections.
+  --experimental-watch-progress-notify-interval '10m'
+    Duration of periodical watch progress notification.
+  --experimental-downgrade-check-time
+    Duration of time between two downgrade status checks.
+  --experimental-memory-mlock
+    Enable to enforce etcd pages (in particular bbolt) to stay in RAM.
+  --experimental-warning-apply-duration '100ms'
+	Warning is generated if requests take more than this duration.
+  --experimental-txn-mode-write-with-shared-buffer 'true'
+    Enable the write transaction to use a shared buffer in its readonly check operations.
+  --experimental-bootstrap-defrag-threshold-megabytes
+    Enable the defrag during etcd server bootstrap on condition that it will free at least the provided threshold of disk space. Needs to be set to non-zero value to take effect.
+  --experimental-stop-grpc-service-on-defrag
+    Enable etcd gRPC service to stop serving client requests on defragmentation.
+
+Unsafe feature:
+  --force-new-cluster 'false'
+    Force to create a new one-member cluster.
+  --unsafe-no-fsync 'false'
+    Disables fsync, unsafe, will cause data loss.
+
+CAUTIOUS with unsafe flag! It may break the guarantees given by the consensus protocol!
+
+
+```
+

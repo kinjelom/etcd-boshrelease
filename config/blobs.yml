@@ -1,4 +1,12 @@
-etcd/etcd-v3.3.25-linux-amd64.tar.gz:
-  size: 14266642
-  object_id: 6ce1405e-578a-410b-549b-74627a1cae2a
-  sha: sha256:aabbb6b657ca69686f5867f3a29db41dd25ed946ff47dec77e6675292fba473a
+etcd/etcd-v3.5.14-linux-amd64.tar.gz:
+  size: 20090782
+  object_id: 8d7115ab-c0fe-432b-6e0f-b5c5ec255b4f
+  sha: sha256:b0b34298f53f6830f08e7ddc57fc74dc45563216a66e94d9e6b0b9e0b0281b34
+tools/jq-1.7.1-linux-amd64:
+  size: 2319424
+  object_id: e654dd81-3f8b-4d26-54ac-56a8323852dd
+  sha: sha256:5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
+tools/yq-4.44.2-linux-amd64:
+  size: 9961624
+  object_id: 0b5ec34a-d3d5-4a5c-419f-13e5eea1b034
+  sha: sha256:246b781828353a59fb04ffaada241f78a8f3f25c623047b40306def1f6806e71

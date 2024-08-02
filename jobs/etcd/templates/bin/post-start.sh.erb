@@ -1,0 +1,24 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcd_get_healthy_members_count' 'etcd_wait_for_healthy'
+etcd_client_local_urls=''; etcd_client_others_urls=''; job_ops_timeout_seconds='';
+source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_declared_functions 'log_audit'
+assert_non_empty_variables 'etcd_client_local_urls' 'etcd_client_others_urls' 'job_ops_timeout_seconds'
+
+log_audit "etcd:post-start" "begin"
+
+cluster_healthy_members=0
+etcd_get_healthy_members_count "$etcd_client_others_urls" cluster_healthy_members
+my_healthy_status="run without checking"
+if [[ $cluster_healthy_members -gt 0 ]]; then
+  if etcd_wait_for_healthy "$etcd_client_local_urls" "$job_ops_timeout_seconds" "$etcd_client_local_urls"; then
+    my_healthy_status="healthy"
+  else
+    my_healthy_status="NOT healthy"
+  fi
+fi
+
+log_audit "etcd:post-start" "end (others healthy: $cluster_healthy_members, my healthy status: $my_healthy_status)"

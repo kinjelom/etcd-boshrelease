@@ -1,0 +1,16 @@
+set -e
+
+source meta-info/blobs-versions.env
+
+mkdir -p "${BOSH_INSTALL_TARGET}/bin/"
+mkdir -p "${BOSH_INSTALL_TARGET}/scripts/"
+
+cp -a "tools/jq-${JQ_VERSION}-linux-amd64" "${BOSH_INSTALL_TARGET}/bin/jq"
+chmod +x "${BOSH_INSTALL_TARGET}/bin/jq"
+
+cp -a "tools/yq-${YQ_VERSION}-linux-amd64" "${BOSH_INSTALL_TARGET}/bin/yq"
+chmod +x "${BOSH_INSTALL_TARGET}/bin/yq"
+
+cp -a "tools/common.sh" "${BOSH_INSTALL_TARGET}/scripts/common.sh"
+chmod +x "${BOSH_INSTALL_TARGET}/scripts/common.sh"
+

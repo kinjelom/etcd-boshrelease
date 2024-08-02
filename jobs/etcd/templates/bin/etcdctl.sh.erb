@@ -1,0 +1,23 @@
+#!/bin/bash -eu
+
+source /var/vcap/packages/tools/scripts/common.sh
+source /var/vcap/jobs/etcd/bin/etcd-utils.sh
+assert_declared_functions 'etcdctl_local' 'etcdctl_others' 'etcdctl_cluster'
+
+source /var/vcap/jobs/etcd/bin/etcd-functions.sh
+assert_declared_functions 'etcdctl'
+
+mode=${CTL_MODE:-'local'}
+
+if [ "$mode" == "cluster" ]; then
+  etcdctl_cluster "$@"
+elif [ "$mode" == "others"  ]; then
+  etcdctl_others "$@"
+elif [ "$mode" == "local"  ]; then
+  etcdctl_local "$@"
+elif [ "$mode" == "custom"  ]; then
+  etcdctl "$@"
+else
+  echo "Unknown \$CTL_MODE=$mode"
+  exit 1
+fi
