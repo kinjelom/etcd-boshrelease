@@ -1,7 +1,7 @@
-etcd/etcd-v3.5.14-linux-amd64.tar.gz:
-  size: 20090782
-  object_id: 8d7115ab-c0fe-432b-6e0f-b5c5ec255b4f
-  sha: sha256:b0b34298f53f6830f08e7ddc57fc74dc45563216a66e94d9e6b0b9e0b0281b34
+etcd/etcd-v3.5.15-linux-amd64.tar.gz:
+  size: 20101925
+  object_id: 066aaa1b-9f9e-4843-635c-77e732f9e77c
+  sha: sha256:3f6b48d8c2844699f2b19c1880508ecf63e1489769ed37ebb97495d5cd848a89
 tools/jq-1.7.1-linux-amd64:
   size: 2319424
   object_id: e654dd81-3f8b-4d26-54ac-56a8323852dd
