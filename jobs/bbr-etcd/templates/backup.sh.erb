@@ -7,7 +7,9 @@ assert_declared_functions 'etcd_find_leader_endpoint'
 etcd_client_local_urls=''; etcd_client_cluster_urls=''; snapshot_filename=''; etcd_meta_info_bbr_filename='';
 source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
 assert_non_empty_variables 'etcd_client_local_urls' 'etcd_client_cluster_urls' 'snapshot_filename' 'etcd_meta_info_bbr_filename'
-assert_declared_functions 'log_audit' 'log_bbr' 'etcd_create_snapshot' 'etcd_write_bbr_meta_info_file'
+assert_declared_functions 'audit_log_ensure_access' 'log_audit' 'log_bbr' 'etcd_create_snapshot' 'etcd_write_bbr_meta_info_file'
+
+audit_log_ensure_access
 
 log_audit "begin (BBR_ARTIFACT_DIRECTORY=$BBR_ARTIFACT_DIRECTORY)"
 

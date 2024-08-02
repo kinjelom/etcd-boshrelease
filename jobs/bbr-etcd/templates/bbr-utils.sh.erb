@@ -36,6 +36,12 @@ log_audit() {
   echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [audit/$cmd/$SUDO_USER] - $*" >> "$etcd_lifecycle_audit_log_file"
 }
 
+audit_log_ensure_access() {
+  touch "$etcd_lifecycle_audit_log_file"
+  chown vcap:vcap "$etcd_lifecycle_audit_log_file"
+}
+
+
 log_bbr() {
   local cmd=$(basename "$SUDO_COMMAND")
   if [ -z "$cmd" ]; then

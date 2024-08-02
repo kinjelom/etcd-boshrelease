@@ -15,8 +15,10 @@ assert_declared_functions 'etcd_remove_member_from_cluster'
 
 etcd_member_name=''; etcd_client_cluster_urls=''
 source /var/vcap/jobs/etcd/bin/etcd-utils.sh
-assert_declared_functions 'log_audit'
+assert_declared_functions 'audit_log_ensure_access' 'log_audit'
 assert_non_empty_variables 'etcd_member_name' 'etcd_client_cluster_urls'
+
+audit_log_ensure_access
 
 log_audit "etcd:pre-stop" "begin (BOSH_VM_NEXT_STATE=$BOSH_VM_NEXT_STATE, BOSH_INSTANCE_NEXT_STATE=$BOSH_INSTANCE_NEXT_STATE, BOSH_DEPLOYMENT_NEXT_STATE=$BOSH_DEPLOYMENT_NEXT_STATE)"
 

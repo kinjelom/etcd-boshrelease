@@ -42,6 +42,10 @@ log_audit() {
   echo "$(date +'%Y-%m-%d %H:%M:%S.%3N') [audit$cmp] - $*" >> "$etcd_lifecycle_audit_log_file"
 }
 
+audit_log_ensure_access() {
+  touch "$etcd_lifecycle_audit_log_file"
+  chown vcap:vcap "$etcd_lifecycle_audit_log_file"
+}
 
 etcdctl_local() {
   etcdctl --endpoints "$etcd_client_local_urls" "$@"

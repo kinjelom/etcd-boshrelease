@@ -3,11 +3,13 @@
 source /var/vcap/packages/tools/scripts/common.sh
 etcd_store_dir=''; backup_data_before_restore='';
 source /var/vcap/jobs/bbr-etcd/bin/bbr/bbr-utils.sh
-assert_declared_functions 'log_audit' 'log_bbr' 'etcd_job_stop'
+assert_declared_functions 'audit_log_ensure_access' 'log_audit' 'log_bbr' 'etcd_job_stop'
 assert_non_empty_variables 'etcd_store_dir' 'backup_data_before_restore'
 
 source /var/vcap/jobs/etcd/bin/etcd-functions.sh
 assert_declared_functions 'etcd_remove_restoring_flag_file'
+
+audit_log_ensure_access
 
 log_audit "begin"
 
