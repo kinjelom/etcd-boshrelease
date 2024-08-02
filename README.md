@@ -1,9 +1,10 @@
 # ETCD BOSH Release
 
-Bosh deployment dla klastra ETCD.
+Bosh deployment for an ETCD cluster.
 
-Wsparcie dla:
-- bootstrapu klastra po jego całkowitym wyłączeniu
-- bakup i restore z użyciem BBR (backup danych z lidera klastra) 
+Support for:
+- Cluster bootstrap after complete shutdown
+- Backup and restore using BBR (data backup from the cluster leader)
 
+See [an example with manifests](example).
 
